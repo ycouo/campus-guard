@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>校园安全地图 · 校园守护</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#e5322d" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="校园守护" />
+
+<style>
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+:root { --red:#e5322d; --purple:#5b5bd6; --ink:#171a20; --ink2:#4b5160; --muted:#8b91a1; --line:#eef0f4; --bg:#f6f7f9; --card:#fff;
+  --green:#2f9e44; --amber:#b8730a;
+  --r:16px; --r-sm:12px; --r-xs:9px;
+  --sh1:0 1px 2px rgba(16,24,40,.04), 0 2px 8px rgba(16,24,40,.05); }
+body { font-family:"PingFang SC","Microsoft YaHei","Hiragino Sans GB",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,sans-serif; background:var(--bg); color:var(--ink); }
+.app { max-width:480px; margin:0 auto; min-height:100vh; padding:0 18px 32px; }
+.topbar { display:flex; align-items:center; justify-content:space-between; padding:14px 2px 10px; }
+.brand { font-size:17px; font-weight:600; letter-spacing:.5px; display:flex; align-items:center; gap:8px; }
+.brand .ic { width:28px; height:28px; border-radius:9px; background:rgba(91,91,214,.10); color:var(--purple);
+  display:flex; align-items:center; justify-content:center; flex:none; }
+.pill-btn { border:none; background:rgba(23,26,32,.055); color:var(--ink2); font-size:13px; padding:7px 13px; border-radius:999px; cursor:pointer; }
+.campus-tabs { display:flex; gap:4px; margin-top:8px; padding:3px; background:rgba(23,26,32,.045); border-radius:13px; }
+.tab { flex:1; text-align:center; border:none; background:transparent; color:var(--ink2);
+       font-size:13px; padding:9px 6px; border-radius:10px; cursor:pointer;
+       transition:background .18s ease, color .18s ease; }
+.tab.on { background:var(--card); color:var(--purple); font-weight:600; box-shadow:var(--sh1); }
+/* 区块小标题：小号灰字，起分隔作用又不抢视线 */
+.sec-title { font-size:13px; font-weight:600; color:var(--muted); letter-spacing:.4px; padding:14px 2px 8px; }
+.card { background:var(--card); border:none; border-radius:var(--r); box-shadow:var(--sh1); padding:15px; margin-top:10px; }
+.addr-title { font-size:13px; color:var(--muted); margin-bottom:8px; }
+.level { font-size:24px; font-weight:700; line-height:1.4; display:flex; align-items:center; gap:9px; }
+/* 安全结论前加一个同色圆点：颜色之外多一层形状提示，色弱用户也读得出来 */
+.lv-safe .level::before, .lv-warn .level::before, .lv-danger .level::before {
+  content:''; flex:none; width:11px; height:11px; border-radius:50%; background:currentColor; }
+.advice { font-size:14px; color:var(--muted); line-height:1.7; margin-top:8px; }
+.facts { font-size:13px; line-height:1.9; margin-top:10px; color:var(--ink); }
+.lv-safe .level { color:#2f9e44; } .lv-safe { background:linear-gradient(180deg,#f0faf1 0%,#fff 72%); }
+.lv-warn .level { color:#b8730a; } .lv-warn { background:linear-gradient(180deg,#fff8ec 0%,#fff 72%); }
+.lv-danger .level { color:#c92a2a; } .lv-danger { background:linear-gradient(180deg,#fff4f3 0%,#fff 72%); }
+#map { width:100%; height:320px; margin-top:10px; border:none; border-radius:var(--r); box-shadow:var(--sh1); background:#eef0f4; }
+.map-tip { font-size:12px; color:var(--muted); text-align:center; margin-top:6px; line-height:1.7; }
+.big-btn { display:block; width:100%; border:none; font-size:16px; font-weight:600; padding:14px; border-radius:var(--r-sm); cursor:pointer; margin-top:10px; text-align:center; text-decoration:none; }
+.btn-purple { background:var(--purple); color:#fff; box-shadow:0 4px 14px rgba(91,91,214,.20); }
+.btn-red { background:var(--red); color:#fff; font-weight:600; box-shadow:0 4px 14px rgba(229,50,45,.22); }
+.btn-ghost { background:var(--card); color:var(--ink2); box-shadow:var(--sh1); font-size:15px; font-weight:500; }
+.row-btns { display:flex; gap:10px; margin-top:10px; }
+.row-btns .big-btn { margin-top:0; }
+.item { display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:13px; padding:9px 0; border-bottom:1px solid var(--line); }
+.item:last-child { border-bottom:none; }
+.item > span:first-child { display:flex; align-items:center; gap:8px; }
+.item > span:first-child::before { content:''; flex:none; width:6px; height:6px; border-radius:50%; background:#c9ced8; }
+#point-list .item > span:first-child::before { background:var(--green); }
+#risk-list  .item > span:first-child::before { background:var(--red); }
+
+/* ===== 长按统一处理 =====
+   移动端长按时系统会弹出"选择/拷贝"浮层或上下文菜单，并发出 touchcancel 打断页面逻辑。
+   报警类页面上这是不能接受的，所以对所有可点按元素屏蔽掉；正文仍可正常划选复制。 */
+body { -webkit-tap-highlight-color:transparent; }
+button, .chip, .tab, .big-btn, [onclick] { user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+input, textarea, select { user-select:text; -webkit-user-select:text; -webkit-touch-callout:default; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><span class="ic"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21.5s7.5-3.6 7.5-9.5V5.2L12 2.5 4.5 5.2V12c0 5.9 7.5 9.5 7.5 9.5z"/></svg></span>校园安全地图</div>
+    <div><button class="pill-btn" onclick="location.href='index.html'">返回首页</button></div>
+  </div>
+
+  <div class="campus-tabs" id="campus-tabs"></div>
+  <div class="sec-title">基于定位自动判断</div>
+  <p style="font-size:12px;color:var(--muted);line-height:1.7;padding:0 2px;">
+    在哪个校区 · 校内还是校外 · 离最近求助点多远 · 是否夜间时段
+  </p>
+
+  <div id="judge-card" class="card">
+    <div class="level" style="font-size:16px;">正在获取当前位置…</div>
+    <div class="advice">需要允许浏览器使用定位权限</div>
+  </div>
+
+  <div id="map"></div>
+  <p class="map-tip" id="map-tip">地图加载中…</p>
+
+  <div class="row-btns">
+    <button class="big-btn btn-purple" onclick="locate()">重新定位</button>
+    <a class="big-btn btn-ghost" id="goto-nearest" href="#">前往最近求助点</a>
+  </div>
+  <div class="sec-title">把当前位置记下来</div>
+  <div class="row-btns">
+    <button class="big-btn btn-ghost" onclick="markRisk()">标记为危险点</button>
+    <button class="big-btn btn-ghost" onclick="markSafe()">标记为求助点</button>
+  </div>
+  <button class="big-btn btn-red" onclick="location.href='index.html'">我有危险 · 去报警</button>
+
+  <div class="card">
+    <div class="addr-title">我标记过的危险点</div>
+    <div id="risk-list"><span style="font-size:13px;color:var(--muted)">暂无</span></div>
+  </div>
+
+  <div class="card">
+    <div class="addr-title">当前校区的求助点</div>
+    <div id="point-list"></div>
+  </div>
+
+  <p class="map-tip">演示原型 · 定位精度受环境影响，实际使用请以现场判断为准</p>
+</div>
+
+<script src="campus-data.js"></script>
+<script>
+/* =====================================================================
+   校园安全地图（多校区版）
+   ① 纯本地的安全判定（不依赖地图，任何环境都能用）
+   ② 腾讯地图 GL JS 渲染真实校园地图（合规地图服务）
+   ===================================================================== */
+
+/* 腾讯地图 key：
+   留空 → 使用本地代理模式（仅在本机预览环境可用）
+   填入自己在腾讯位置服务申请的 key → 手机 / 线上部署也能显示地图
+   申请入口：https://lbs.qq.com/dev/console/application/mine */
+const TMAP_KEY = '';
+
+let myPos = null;      /* 当前定位（WGS-84） */
+let map = null, markers = null, boundary = null;
+/* 当前真正生效的校区 id：手动选过就永远听用户的；没选过则由定位结果自动识别出来 */
+let curCampusId = getCampusId();
+/* 当前生效的校区对象：手动选过 > 已自动识别出的 > 默认校区 */
+function activeCampus() {
+  const id = curCampusId || getCampusId() || DEFAULT_CAMPUS_ID;
+  return CAMPUSES.filter(function (c) { return c.id === id; })[0] || CAMPUSES[0];
+}
+
+/* ---------- 校区切换 ---------- */
+function renderTabs() {
+  const cur = curCampusId || getCampusId() || DEFAULT_CAMPUS_ID;
+  document.getElementById('campus-tabs').innerHTML = CAMPUSES.map(function (c) {
+    return '<div class="tab' + (c.id === cur ? ' on' : '') + '" onclick="switchCampus(\'' + c.id + '\')">' + c.name + '</div>';
+  }).join('');
+}
+function switchCampus(id) {
+  setCampusId(id);        /* 写进 localStorage，之后所有页面都以它为准 */
+  curCampusId = id;
+  renderTabs();
+  renderPointList();      /* 求助点列表跟着换 */
+  drawMap();              /* 地图立刻平移到该校区（没定位也能画） */
+  if (myPos) renderJudge();/* 已定位的话，安全结论也按新选的校区重算 */
+}
+
+/* ---------- 定位 + 判定 ---------- */
+function locate() {
+  document.getElementById('judge-card').className = 'card';
+  document.getElementById('judge-card').innerHTML =
+    '<div class="level" style="font-size:16px;">正在获取当前位置…</div>';
+  if (!navigator.geolocation) { renderJudgeFail('浏览器不支持定位'); return; }
+
+  /* 两阶段定位：先用 Wi-Fi／基站粗定位秒出结果（室内也能拿到），
+     再后台争取一次 GPS 高精度，拿到了就刷新。
+     原来写死 enableHighAccuracy:true + 12 秒超时，室内几乎必定超时 —— 这是"定位失败"最主要的技术原因。 */
+  function ok(p) {
+    myPos = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy };
+    renderJudge();
+    drawMap();
+  }
+  /* 第一步：粗定位，8 秒 */
+  navigator.geolocation.getCurrentPosition(function (p) {
+    ok(p);
+    /* 第二步：后台高精度，25 秒，只在精度真的更好时才覆盖 */
+    navigator.geolocation.getCurrentPosition(function (fine) {
+      const a = fine.coords.accuracy;
+      if (a && myPos.acc && a >= myPos.acc) return;
+      ok(fine);
+    }, function () {}, { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 });
+  }, function (e) {
+    /* 粗定位也失败：直接退到高精度长超时，给最后一次机会 */
+    navigator.geolocation.getCurrentPosition(ok, function (e2) {
+      renderJudgeFail('定位失败：' + posErrText(e2));
+    }, { enableHighAccuracy: true, timeout: 22000, maximumAge: 0 });
+  }, { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 });
+}
+
+/* 错误码 → 人话，告诉用户下一步该干嘛 */
+function posErrText(e) {
+  const map = {
+    1: '定位权限被拒绝。请在浏览器设置里允许本网站使用位置（iPhone 还需打开「精确位置」开关）。',
+    2: '暂时拿不到位置信息。请确认手机已开启定位服务，并连接 Wi-Fi 或移动网络。',
+    3: '定位超时。室内或地下室 GPS 搜不到卫星 —— 请靠近窗户或走到室外再试。'
+  };
+  return (e && map[e.code]) || (e && e.message) || '请检查定位权限，并确认使用 HTTPS 打开';
+}
+
+function renderJudgeFail(msg) {
+  document.getElementById('judge-card').className = 'card lv-warn';
+  document.getElementById('judge-card').innerHTML =
+    '<div class="level" style="font-size:16px;">' + msg + '</div>';
+}
+
+function renderJudge() {
+  /* 第三参传当前生效校区：手动选了就按手动的，没选过传 null 让程序自动识别 */
+  const j = judgeSafety(myPos.lat, myPos.lng, getCampusId());
+  /* 从没手动选过 → 记住自动识别的结果，tab 高亮和地图就跟它走 */
+  if (!getCampusId()) { curCampusId = j.campus.id; renderTabs(); }
+  const el = document.getElementById('judge-card');
+  el.className = 'card lv-' + j.level;
+  el.innerHTML =
+    '<div class="level">' + j.title + '</div>' +
+    '<div class="advice">' + j.advice + '</div>' +
+    '<div class="facts">' +
+      '当前判定：' + j.summary + '<br/>' +
+      (j.reasons.length ? '判定依据：' + j.reasons.join('；') : '判定依据：各项指标正常') +
+    '</div>' +
+    /* 跨校区看：你在开发区，却选了凌水来查看 —— 说明情况，避免误以为是 bug */
+    (j.mismatch
+      ? '<div class="facts" style="color:#185fa5">你实际距离「' + j.mismatch.name + '」更近，' +
+        '当前按手动选择的「' + j.campus.name + '」给出结论</div>' : '');
+
+  /* 最近求助点：一键导航（腾讯地图 URI，合规） */
+  const g = j.gcj, n = j.nearest;
+  /* URI API 新版：/uri/v1/route，from/to 都是 coord:纬度,经度；旧版 /uri?type=route 已停用 */
+  document.getElementById('goto-nearest').href =
+    'https://apis.map.qq.com/uri/v1/route?from=coord:' + g.lat.toFixed(6) + ',' + g.lng.toFixed(6) +
+    '&to=coord:' + n.lat.toFixed(6) + ',' + n.lng.toFixed(6) + '&policy=0&referer=campusguard';
+  document.getElementById('goto-nearest').textContent = '去「' + n.name + '」（' + n.dist + ' 米）';
+
+  renderLists();
+}
+
+function renderLists() {
+  const risks = getRisks();
+  document.getElementById('risk-list').innerHTML = risks.length
+    ? risks.map(function (r, i) {
+        const gg = myPos ? cgWgsToGcj(myPos.lat, myPos.lng) : null;
+        const d = gg ? cgDist(gg.lat, gg.lng, r.lat, r.lng) : null;
+        return '<div class="item"><span>' + (r.note || '危险点 ' + (i+1)) + '</span><span>' +
+               (d !== null ? d + ' 米' : r.lat.toFixed(4) + ',' + r.lng.toFixed(4)) + '</span></div>';
+      }).join('') +
+      '<button class="big-btn btn-ghost" onclick="clearRisks();locate();">清除我标记的危险点</button>'
+    : '<span style="font-size:13px;color:var(--muted)">暂无。觉得哪条路不安全，站到那里点上面按钮即可标记，下次靠近会提醒你。</span>';
+  renderPointList();
+}
+
+function renderPointList() {
+  const c = activeCampus();
+  const gg = myPos ? cgWgsToGcj(myPos.lat, myPos.lng) : null;
+  const up = getUserPoints();
+  document.getElementById('point-list').innerHTML =
+    c.points.concat(up).map(function (p) {
+      const d = gg ? cgDist(gg.lat, gg.lng, p.lat, p.lng) : null;
+      return '<div class="item"><span>' + p.name + '</span><span>' +
+             (p.phone ? '<a href="tel:' + p.phone + '" style="color:#185fa5;">' + p.phone + '</a>' : '') +
+             (d !== null ? ' · ' + d + ' 米' : '') + '</span></div>';
+    }).join('') +
+    (up.length ? '<button class="big-btn btn-ghost" onclick="clearUserPoints();locate();">清除我添加的求助点</button>' : '');
+}
+
+/* ---------- 标记点位 ---------- */
+function markRisk() {
+  if (!myPos) { alert('请先完成定位'); return; }
+  const note = prompt('给这个危险点起个名字（例如：后山小路、南门外黑巷子）', '危险点');
+  if (note === null) return;
+  const g = cgWgsToGcj(myPos.lat, myPos.lng);
+  addRisk(g.lat, g.lng, note);
+  renderJudge(); drawMap();
+  alert('已标记。以后走近这里 200 米内，系统会自动提示风险。');
+}
+function markSafe() {
+  if (!myPos) { alert('请先完成定位'); return; }
+  const name = prompt('这个求助点的名字（例如：求实书院宿舍楼、六食堂门口保安亭）', '我添加的求助点');
+  if (name === null) return;
+  const g = cgWgsToGcj(myPos.lat, myPos.lng);
+  addUserPoint(g.lat, g.lng, name);
+  renderJudge(); drawMap();
+  alert('已添加为求助点，之后判定"最近求助点"时会算上它。');
+}
+
+/* ---------- 腾讯地图渲染 ---------- */
+function iconUrl(color) {
+  const svg = "<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26'><circle cx='13' cy='13' r='10' fill='" + color + "' stroke='white' stroke-width='3'/></svg>";
+  return 'data:image/svg+xml,' + encodeURIComponent(svg);
+}
+/* 用一组点近似画一个圆（校园范围），避免依赖额外的图形类 */
+function circlePath(lat, lng, r, n) {
+  const out = [];
+  for (let i = 0; i <= n; i++) {
+    const a = i / n * 2 * Math.PI;
+    out.push([lng + (r / 111320 / Math.cos(lat * Math.PI / 180)) * Math.sin(a),
+              lat + (r / 110540) * Math.cos(a)]);
+  }
+  return out;
+}
+function drawMap() {
+  if (!window.TMap) return;
+  /* 校区始终跟随「用户当前选的」tab —— 原来这里用的是 judgeSafety 自动挑的
+     "离你最近的校区"，导致手动点「凌水主校区」时地图纹丝不动。
+     没定位时也能画：这时只显示校区范围和安全点，不标"我在哪"。 */
+  const c = activeCampus();
+  const g = myPos ? cgWgsToGcj(myPos.lat, myPos.lng) : null;
+  if (!map) {
+    map = new TMap.Map('map', { zoom: 15, center: new TMap.LatLng(c.center.lat, c.center.lng), pitch: 0 });
+  } else {
+    map.setCenter(new TMap.LatLng(c.center.lat, c.center.lng));
+  }
+  if (markers) { markers.setMap(null); markers = null; }
+  if (boundary) { boundary.setMap(null); boundary = null; }
+
+  boundary = new TMap.MultiPolyline({
+    map: map,
+    styles: { line: new TMap.PolylineStyle({ color: '#185fa5', width: 3, borderWidth: 0, lineCap: 'round' }) },
+    geometries: [{ id: 'campus', styleId: 'line',
+      paths: circlePath(c.center.lat, c.center.lng, c.radius, 48)
+        .map(function (p) { return new TMap.LatLng(p[1], p[0]); }) }]
+  });
+
+  const geos = c.points.concat(getUserPoints()).map(function (p, i) {
+    return { id: 'p' + i, styleId: p.type === 'safe' ? 'safe' : 'gate',
+             position: new TMap.LatLng(p.lat, p.lng) };
+  });
+  getRisks().forEach(function (r, i) {
+    geos.push({ id: 'r' + i, styleId: 'risk', position: new TMap.LatLng(r.lat, r.lng) });
+  });
+  if (g) geos.push({ id: 'me', styleId: 'me', position: new TMap.LatLng(g.lat, g.lng) });
+
+  markers = new TMap.MultiMarker({
+    map: map,
+    styles: {
+      safe: new TMap.MarkerStyle({ width: 26, height: 26, anchor: { x: 13, y: 13 }, src: iconUrl('#2f7d32') }),
+      gate: new TMap.MarkerStyle({ width: 26, height: 26, anchor: { x: 13, y: 13 }, src: iconUrl('#ef9f27') }),
+      risk: new TMap.MarkerStyle({ width: 26, height: 26, anchor: { x: 13, y: 13 }, src: iconUrl('#d32f2f') }),
+      me:   new TMap.MarkerStyle({ width: 26, height: 26, anchor: { x: 13, y: 13 }, src: iconUrl('#185fa5') })
+    },
+    geometries: geos
+  });
+  document.getElementById('map-tip').innerHTML =
+    '<b>' + c.name + '</b>　' + c.addr +
+    '<br/>蓝圈＝校园范围　绿点＝可求助点　橙点＝校门　红点＝你标记的危险点' +
+    (g ? '　蓝点＝你在的位置' : '　<i>（还没定位，点上面按钮获取位置）</i>');
+}
+
+/* 加载腾讯地图 SDK：优先用自己申请的 key，没有则走本地代理模式 */
+(function loadTMap() {
+  const tip = document.getElementById('map-tip');
+  if (TMAP_KEY) {
+    const s = document.createElement('script');
+    s.src = 'https://map.qq.com/api/gljs?v=1.exp&key=' + TMAP_KEY;
+    s.onload = function () { drawMap(); };   /* 不等定位：先把所选校区画出来 */
+    s.onerror = mapUnavailable;
+    document.head.appendChild(s);
+  } else {
+    window._TMapSecurityConfig = {
+      serviceHost: 'http://127.0.0.1:__WB_HTTP_PORT__/_TMapService/_wbt/__WB_TMAP_SECRET__'
+    };
+    const s = document.createElement('script');
+    s.src = 'https://map.qq.com/api/gljs?v=1.exp';
+    s.onload = function () { setTimeout(function () { if (window.TMap) drawMap(); else mapUnavailable(); }, 800); };
+    s.onerror = mapUnavailable;
+    document.head.appendChild(s);
+  }
+  function mapUnavailable() {
+    document.getElementById('map').style.display = 'none';
+    tip.innerHTML = '地图当前不可用（本地代理仅在预览环境生效）。<br/>安全判定不依赖地图，上面的结论照常可用；<br/>如需手机上也显示地图，去腾讯位置服务申请免费 key 后填进 campus.html 的 TMAP_KEY。';
+  }
+})();
+
+renderTabs();
+renderPointList();
+locate();
+</script>
+
+<script>
+/* 长按统一处理：屏蔽系统上下文菜单与文字选中，避免打断页面的长按操作 */
+(function () {
+  var pick = 'button,[onclick],.chip,.tab';
+  document.addEventListener('contextmenu', function (e) {
+    if (e.target && e.target.closest && e.target.closest(pick)) e.preventDefault();
+  });
+  document.addEventListener('selectstart', function (e) {
+    if (e.target && e.target.closest && e.target.closest(pick)) { e.preventDefault(); return false; }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>模拟接警端 · 校园守护</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#0f172a" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="校园守护" />
+
+<style>
+/* 接警台：深色控制台风格（演示用途，模拟 110 接警界面） */
+* { margin:0; padding:0; box-sizing:border-box; }
+:root { --bg:#0f172a; --panel:#1e293b; --line:#334155; --text:#e2e8f0; --muted:#94a3b8;
+  --red:#e24b4a; --purple:#a79fef; --green:#5dcaa5; --amber:#f2c063; }
+body { font-family:"PingFang SC","Microsoft YaHei","Hiragino Sans GB",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+.wrap { max-width:860px; margin:0 auto; padding:24px 20px 48px; }
+.head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+h1 { font-size:20px; font-weight:600; letter-spacing:2px; }
+h1 .live { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--red); margin-right:8px; animation:blink 1.2s infinite; }
+@keyframes blink { 50% { opacity:.3; } }
+.sub { font-size:12px; color:var(--muted); margin-bottom:20px; }
+.toolbar { text-align:right; margin-bottom:12px; }
+.toolbar button { background:transparent; border:1px solid var(--line); color:var(--muted);
+  font-size:12px; padding:6px 14px; border-radius:999px; cursor:pointer; transition:border-color .18s ease, color .18s ease; }
+.toolbar button:hover { border-color:var(--purple); color:var(--purple); }
+.empty { text-align:center; color:var(--muted); padding:60px 0; }
+.empty .ic { width:64px; height:64px; margin:0 auto 14px; border-radius:20px; background:rgba(226,75,74,.12);
+  color:var(--red); display:flex; align-items:center; justify-content:center; }
+.empty .t { font-size:15px; font-weight:600; color:var(--text); }
+.empty .d { font-size:12.5px; line-height:1.9; margin-top:6px; }
+.event { position:relative; overflow:hidden; background:var(--panel); border:1px solid var(--line);
+  border-radius:14px; padding:16px 18px; margin-bottom:12px;
+  box-shadow:0 2px 10px rgba(0,0,0,.18); transition:opacity .2s ease; }
+/* 左侧竖条按报警类型着色：接警员扫一眼就能分清"有人打的"还是"静默报警" */
+.event::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--line); }
+.event.voice::before { background:var(--red); }
+.event.silent::before { background:var(--purple); }
+.event.cancelled { opacity:.5; }
+.event.cancelled::before { background:var(--green); }
+.ev-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.badge { display:inline-flex; align-items:center; gap:6px; font-size:12px; padding:3px 11px; border-radius:999px; font-weight:600; }
+.badge::before { content:''; width:6px; height:6px; border-radius:50%; background:currentColor; }
+.badge.voice::before { animation:blink 1.2s infinite; }
+.badge.voice { background:rgba(226,75,74,.16); color:var(--red); }
+.badge.silent { background:rgba(167,159,239,.16); color:var(--purple); }
+.ev-time { font-size:12px; color:var(--muted); margin-left:auto; }
+.ev-status { font-size:12px; margin-top:6px; color:var(--amber); }
+.event.cancelled .ev-status { color:var(--green); }
+.rows { margin-top:10px; font-size:14px; line-height:1.9; }
+.rows b { color:var(--text); }
+.addr { font-size:17px; font-weight:700; line-height:1.5; margin-top:6px; }
+.coord { font-size:12px; color:var(--muted); margin-top:2px; }
+.report { background:rgba(167,159,239,.07); border:1px solid rgba(167,159,239,.20); border-radius:10px;
+  padding:12px 14px; margin-top:10px; font-size:13px; line-height:1.9; white-space:pre-wrap; }
+.report .rt { color:var(--purple); font-weight:600; font-size:12px; margin-bottom:4px; }
+a.map-link { color:#7fb3e8; font-size:13px; text-decoration:none; }
+.updates { margin-top:8px; font-size:12px; color:var(--muted); line-height:1.8; }
+.tts-tip { font-size:12px; color:var(--amber); margin-top:6px; }
+
+/* ===== 长按统一处理 =====
+   移动端长按会弹出系统"选择/拷贝"浮层或上下文菜单，并发出 touchcancel 打断页面逻辑。
+   这里对所有可点按元素屏蔽掉；正文（报警信息单）仍可正常划选复制。 */
+body { -webkit-tap-highlight-color:transparent; }
+button, .chip, [onclick] { user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+input, textarea, select { user-select:text; -webkit-user-select:text; -webkit-touch-callout:default; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head"><h1><span class="live"></span>模拟接警端</h1></div>
+  <div class="sub">校园守护 · SOS 演示控制台 —— 在同一浏览器中打开用户端页面触发报警，此处将实时接收</div>
+  <div class="toolbar"><button onclick="clearAll()">清空记录</button></div>
+  <div id="events"><div class="empty">
+    <div class="ic"><svg viewBox="0 0 24 24" width="29" height="29" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21.5s7.5-3.6 7.5-9.5V5.2L12 2.5 4.5 5.2V12c0 5.9 7.5 9.5 7.5 9.5z"/></svg></div>
+    <div class="t">暂无报警记录</div>
+    <div class="d">请在用户端长按 SOS 触发一次报警<br/>同一浏览器打开即可实时接收</div>
+  </div></div>
+</div>
+
+<script>
+/* =====================================================================
+   模拟接警端：接收用户端 SOS 消息
+   通信方式：BroadcastChannel（实时） + localStorage storage 事件（兜底）
+   ===================================================================== */
+const LS_EVENTS = 'cg_events';
+const events = {};   // id -> 事件对象（含 updates 数组）
+
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+  return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
+
+function handle(msg) {
+  if (!msg || !msg.type || !msg.id) return;
+  if (msg.type === 'sos') {
+    events[msg.id] = { id: msg.id, mode: msg.mode, name: msg.name, phone: msg.phone,
+      time: msg.time, lat: null, lng: null, address: null, report: null,
+      status: msg.status || '定位中', cancelled: false, updates: [] };
+    /* 静默报警：接警端用 TTS 播报报警信息单（本机发声，报警人手机保持静音） */
+    if (msg.mode === 'silent') setTimeout(function () { trySpeak('收到静默报警，正在等待定位与报告。'); }, 200);
+  } else if (msg.type === 'update') {
+    const ev = events[msg.id]; if (!ev) return;
+    if (msg.lat) { ev.lat = msg.lat; ev.lng = msg.lng; }
+    if (msg.address) ev.address = msg.address;
+    if (msg.report) ev.report = msg.report;
+    ev.status = msg.status || '已定位';
+    if (msg.status === '位置更新') ev.updates.push(new Date(msg.time).toLocaleTimeString() + ' 位置更新：' + msg.lat.toFixed(5) + ', ' + msg.lng.toFixed(5));
+    if (msg.report && !ev.reportSpoken) {
+      ev.reportSpoken = true;
+      trySpeak(msg.report.replace(/\n/g, ' '));
+    }
+  } else if (msg.type === 'cancel') {
+    const ev = events[msg.id]; if (!ev) return;
+    ev.cancelled = true; ev.status = '已解除';
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+  }
+  render();
+}
+
+function trySpeak(text) {
+  if (!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'zh-CN'; u.rate = 0.95;
+  const zh = speechSynthesis.getVoices().find(function (v) { return /zh|cmn/i.test(v.lang); });
+  if (zh) u.voice = zh;
+  speechSynthesis.speak(u);
+}
+
+/* 腾讯地图 URI API 新版（/uri/v1/marker）：coord 纬度在前；旧版已停用 */
+function mapLink(lat, lng) {
+  return 'https://apis.map.qq.com/uri/v1/marker?marker=coord:' + lat.toFixed(6) + ',' + lng.toFixed(6) +
+    ';title:' + encodeURIComponent('SOS位置') + '&referer=campusguard';
+}
+
+function render() {
+  const box = document.getElementById('events');
+  const ids = Object.keys(events).sort().reverse();
+  if (!ids.length) { box.innerHTML = '<div class="empty">暂无报警记录<br/>请打开 index.html 触发一次 SOS</div>'; return; }
+  box.innerHTML = ids.map(function (id) {
+    const e = events[id];
+    return '<div class="event ' + (e.mode === 'silent' ? 'silent' : 'voice') + (e.cancelled ? ' cancelled' : '') + '">' +
+      '<div class="ev-head">' +
+      '<span class="badge ' + e.mode + '">' + (e.mode === 'voice' ? '语音报警' : '静默报警') + '</span>' +
+      '<span class="ev-time">' + new Date(e.time).toLocaleTimeString() + '</span></div>' +
+      '<div class="ev-status">状态：' + esc(e.status) + '</div>' +
+      '<div class="rows"><b>报警人：</b>' + esc(e.name) + (e.phone ? '　<b>电话：</b>' + esc(e.phone) : '') + '</div>' +
+      '<div class="addr">' + (e.address ? esc(e.address) : '<span style="color:var(--amber)">定位中…</span>') + '</div>' +
+      (e.lat ? '<div class="coord">WGS-84 坐标：' + e.lat.toFixed(5) + ', ' + e.lng.toFixed(5) + '　<a class="map-link" target="_blank" href="' + mapLink(e.lat, e.lng) + '">在腾讯地图中查看</a></div>' : '') +
+      (e.report ? '<div class="report"><div class="rt">报警信息单（已自动语音播报）</div>' + esc(e.report) + '</div>' : '') +
+      (e.updates.length ? '<div class="updates">' + e.updates.map(esc).join('<br/>') + '</div>' : '') +
+      '</div>';
+  }).join('');
+}
+
+function clearAll() {
+  if (!confirm('清空所有接警记录？')) return;
+  Object.keys(events).forEach(function (k) { delete events[k]; });
+  localStorage.setItem(LS_EVENTS, '[]');
+  render();
+}
+
+/* 初始化：先读 localStorage 里的历史，再挂实时监听 */
+(function () {
+  try {
+    JSON.parse(localStorage.getItem(LS_EVENTS) || '[]').forEach(handle);
+  } catch (e) {}
+  if ('BroadcastChannel' in window) {
+    new BroadcastChannel('campus-guard-sos').onmessage = function (e) { handle(e.data); };
+  }
+  window.addEventListener('storage', function (e) {
+    if (e.key !== LS_EVENTS || !e.newValue) return;
+    try { handle(JSON.parse(e.newValue).slice(-1)[0]); } catch (err) {}
+  });
+  render();
+})();
+</script>
+
+<script>
+/* 长按统一处理：屏蔽系统上下文菜单与文字选中，避免打断页面的长按操作 */
+(function () {
+  var pick = 'button,[onclick],.chip,.tab';
+  document.addEventListener('contextmenu', function (e) {
+    if (e.target && e.target.closest && e.target.closest(pick)) e.preventDefault();
+  });
+  document.addEventListener('selectstart', function (e) {
+    if (e.target && e.target.closest && e.target.closest(pick)) { e.preventDefault(); return false; }
+  });
+})();
+</script>
+</body>
+</html>

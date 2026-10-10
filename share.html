@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>行程守护 · 实时位置分享</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#e5322d" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="校园守护" />
+
+<style>
+/* 行程分享页：给"守护人"（室友/家人）看的状态页，浅色温暖风格 */
+* { margin:0; padding:0; box-sizing:border-box; }
+:root { --purple:#5b5bd6; --ink:#171a20; --ink2:#4b5160; --muted:#8b91a1; --line:#eef0f4; --bg:#f6f7f9; --card:#fff;
+  --green:#2f9e44; --red:#c92a2a;
+  --r:16px; --r-sm:12px; --r-xs:9px;
+  --sh1:0 1px 2px rgba(16,24,40,.04), 0 2px 8px rgba(16,24,40,.05); }
+body { font-family:"PingFang SC","Microsoft YaHei","Hiragino Sans GB",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,sans-serif; background:var(--bg); color:var(--ink); }
+.wrap { max-width:480px; margin:0 auto; min-height:100vh; padding:22px 18px 44px; }
+
+/* 头部：图标 + 标题 + 一句说明。守护人第一次打开要先认出"这是什么" */
+.head { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+.head .mark { flex:none; width:42px; height:42px; border-radius:13px; background:var(--purple); color:#fff;
+  display:flex; align-items:center; justify-content:center; box-shadow:0 4px 14px rgba(91,91,214,.22); }
+h1 { font-size:18px; font-weight:700; letter-spacing:.3px; }
+.sub { font-size:12px; color:var(--muted); margin-top:3px; line-height:1.7; }
+
+.toolbar { text-align:right; margin-bottom:10px; }
+.toolbar button { background:rgba(23,26,32,.055); border:none; color:var(--ink2); font-size:12px; padding:6px 13px; border-radius:999px; cursor:pointer; }
+.card { background:var(--card); border:none; border-radius:var(--r); box-shadow:var(--sh1); padding:15px; margin-bottom:12px; }
+
+/* 状态行：徽标 + 时间并排，一眼看到"现在什么状态" */
+.st-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.badge { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; padding:4px 12px; border-radius:999px; }
+.badge .dot { width:6px; height:6px; border-radius:50%; background:currentColor; }
+.badge.live .dot { animation:pulse 1.4s infinite; }
+@keyframes pulse { 50% { opacity:.25; } }
+.badge.live { background:rgba(91,91,214,.10); color:var(--purple); }
+.badge.ok { background:rgba(47,158,68,.10); color:var(--green); }
+.badge.alarm { background:rgba(201,42,42,.09); color:var(--red); }
+.st-time { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+
+.k { font-size:12px; color:var(--muted); }
+.v { font-size:15px; font-weight:600; margin-top:2px; line-height:1.6; word-break:break-all; }
+.v.sm { font-size:13.5px; font-weight:500; }
+.field { margin-top:12px; }
+a.map { font-size:13px; color:#1c7ed6; font-weight:500; text-decoration:none; }
+
+.tl-title { font-size:13px; color:var(--muted); margin-bottom:4px; }
+/* 真正的时间线：一条竖线串起每次上报，最新一次圆点带光晕，看得出"还在走" */
+.tl { list-style:none; position:relative; padding-left:16px; }
+.tl::before { content:''; position:absolute; left:4px; top:14px; bottom:14px; width:1px; background:var(--line); }
+.tl li { position:relative; display:flex; justify-content:space-between; align-items:center; gap:10px;
+  padding:9px 0; font-size:13px; }
+.tl li::before { content:''; position:absolute; left:-16px; top:15px; width:7px; height:7px; border-radius:50%;
+  background:#d8dce4; box-shadow:0 0 0 3px #fff; }
+.tl li:first-child::before { background:var(--purple); box-shadow:0 0 0 3px rgba(91,91,214,.16); }
+.tl .t { color:var(--muted); font-size:12px; flex:none; font-variant-numeric:tabular-nums; }
+.tl .d { flex:1; color:var(--ink2); }
+
+/* 空态：给个图标和清楚的第一步，别只丢一句"暂无行程" */
+.empty { text-align:center; color:var(--muted); padding:56px 0; }
+.empty .ic { width:66px; height:66px; margin:0 auto 14px; border-radius:20px; background:rgba(91,91,214,.08);
+  color:var(--purple); display:flex; align-items:center; justify-content:center; }
+.empty .t { font-size:15px; font-weight:600; color:var(--ink2); }
+.empty .d { font-size:12.5px; line-height:1.9; margin-top:6px; }
+.note { background:#f4f3fe; border-radius:var(--r-sm); padding:11px 13px; font-size:12px;
+  line-height:1.8; color:var(--ink2); text-align:left; }
+
+/* ===== 长按统一处理 =====
+   移动端长按会弹出系统"选择/拷贝"浮层或上下文菜单，并发出 touchcancel 打断页面逻辑。
+   这里对所有可点按元素屏蔽掉；正文仍可正常划选复制。 */
+body { -webkit-tap-highlight-color:transparent; }
+button, .chip, [onclick] { user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+input, textarea, select { user-select:text; -webkit-user-select:text; -webkit-touch-callout:default; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div class="mark"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
+    <div>
+      <h1>行程守护</h1>
+      <div class="sub">位置实时分享——守护你的人在这里查看你的行程状态<br/>（演示说明：与用户端在同一浏览器中打开即可实时接收）</div>
+    </div>
+  </div>
+  <div class="toolbar"><button onclick="clearAll()">清空记录</button></div>
+  <div id="trip"><div class="empty">
+    <div class="ic"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21.5s7.5-3.6 7.5-9.5V5.2L12 2.5 4.5 5.2V12c0 5.9 7.5 9.5 7.5 9.5z"/></svg></div>
+    <div class="t">暂无行程</div>
+    <div class="d">请在用户端开启「夜间守护模式」<br/>开始后，这里会每 15 秒刷新一次位置</div>
+  </div></div>
+</div>
+
+<script>
+/* =====================================================================
+   行程分享页：接收用户端守护会话的消息流
+   消息类型：trip_start / trip_update / trip_end（存于 cg_trips）
+   ===================================================================== */
+const LS_TRIPS = 'cg_trips';
+const trips = {};  /* tripId -> 会话对象 */
+
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+  return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
+
+/* WGS-84 → GCJ-02（与用户端一致，保证地图落点准确） */
+function wgs84ToGcj02(lat, lng) {
+  const a = 6378245.0, ee = 0.00669342162296594323;
+  function tLat(x, y) {
+    let r = -100 + 2*x + 3*y + 0.2*y*y + 0.1*x*y + 0.2*Math.sqrt(Math.abs(x));
+    r += (20*Math.sin(6*x*Math.PI) + 20*Math.sin(2*x*Math.PI)) * 2/3;
+    r += (20*Math.sin(y*Math.PI) + 40*Math.sin(y/3*Math.PI)) * 2/3;
+    r += (160*Math.sin(y/12*Math.PI) + 320*Math.sin(y*Math.PI/30)) * 2/3;
+    return r;
+  }
+  function tLng(x, y) {
+    let r = 300 + x + 2*y + 0.1*x*x + 0.1*x*y + 0.1*Math.sqrt(Math.abs(x));
+    r += (20*Math.sin(6*x*Math.PI) + 20*Math.sin(2*x*Math.PI)) * 2/3;
+    r += (20*Math.sin(x*Math.PI) + 40*Math.sin(x/3*Math.PI)) * 2/3;
+    r += (150*Math.sin(x/12*Math.PI) + 300*Math.sin(x/30*Math.PI)) * 2/3;
+    return r;
+  }
+  const dLat = tLat(lng-105, lat-35), dLng = tLng(lng-105, lat-35);
+  const radLat = lat/180*Math.PI;
+  let magic = Math.sin(radLat); magic = 1 - ee*magic*magic;
+  const sq = Math.sqrt(magic);
+  const offLat = (dLat*180) / ((a*(1-ee)) / (magic*sq) * Math.PI);
+  const offLng = (dLng*180) / (a/sq*Math.cos(radLat)*Math.PI);
+  return { lat: lat + offLat, lng: lng + offLng };
+}
+/* 腾讯地图 URI API 新版（/uri/v1/marker）：coord 纬度在前；旧版 /uri?coords= 已停用，点开白屏 */
+function mapLink(lat, lng) {
+  const g = wgs84ToGcj02(lat, lng);
+  return 'https://apis.map.qq.com/uri/v1/marker?marker=coord:' + g.lat.toFixed(6) + ',' + g.lng.toFixed(6) +
+    ';title:' + encodeURIComponent('TA的位置') + '&referer=campusguard';
+}
+
+function handle(m) {
+  if (!m || !m.type || !m.tripId) return;
+  if (m.type === 'trip_start') {
+    trips[m.tripId] = { destLat: m.destLat, destLng: m.destLng, start: m.time, points: [], status: '守护中' };
+  } else if (m.type === 'trip_update') {
+    if (!trips[m.tripId]) trips[m.tripId] = { points: [], status: '守护中' };
+    trips[m.tripId].points.push({ lat: m.lat, lng: m.lng, dist: m.dist, time: m.time });
+  } else if (m.type === 'trip_end') {
+    if (!trips[m.tripId]) trips[m.tripId] = { points: [] };
+    trips[m.tripId].status = m.status || '已结束';
+  }
+  render();
+}
+
+function badgeCls(status) {
+  if (/报警/.test(status)) return 'alarm';
+  if (/到达|安全|结束/.test(status)) return 'ok';
+  return 'live';
+}
+
+function render() {
+  const box = document.getElementById('trip');
+  const ids = Object.keys(trips).sort().reverse();
+  if (!ids.length) return; /* 保持初始空态 */
+  const id = ids[0];               /* 只展示最新一次行程 */
+  const t = trips[id];
+  const last = t.points[t.points.length - 1];
+  let html = '<div class="card">' +
+    '<div class="st-head">' +
+      '<span class="badge ' + badgeCls(t.status) + '"><i class="dot"></i>' + esc(t.status) + '</span>' +
+      '<span class="st-time">' + new Date(t.start || Date.now()).toLocaleTimeString() + '</span>' +
+    '</div>' +
+    '<div class="k">开始时间</div><div class="v">' + new Date(t.start || Date.now()).toLocaleTimeString() + '</div>' +
+    (t.destLat ? '<div class="field"><div class="k">目的地</div><div class="v sm">' + t.destLat.toFixed(5) + ', ' + t.destLng.toFixed(5) +
+      '　<a class="map" target="_blank" href="' + mapLink(t.destLat, t.destLng) + '">地图查看</a></div></div>' : '') +
+    (last ? '<div class="field"><div class="k">最新位置' + (last.dist != null ? '（距目的地 ' + (last.dist >= 1000 ? (last.dist/1000).toFixed(1) + ' 公里' : last.dist + ' 米') + '）' : '') + '</div>' +
+      '<div class="v sm">' + last.lat.toFixed(5) + ', ' + last.lng.toFixed(5) +
+      '　<a class="map" target="_blank" href="' + mapLink(last.lat, last.lng) + '">地图查看</a></div></div>' : '') +
+    '</div>';
+  if (t.points.length) {
+    html += '<div class="card"><div class="tl-title" style="margin-bottom:10px;">位置轨迹 · 每 15 秒上报一次</div><ul class="tl">' +
+      t.points.slice().reverse().map(function (p) {
+        return '<li><span class="t">' + new Date(p.time).toLocaleTimeString() + '</span>' +
+          '<span class="d">' + (p.dist != null ? (p.dist >= 1000 ? (p.dist/1000).toFixed(1) + ' 公里' : p.dist + ' 米') : '') + '</span>' +
+          '<a class="map" target="_blank" href="' + mapLink(p.lat, p.lng) + '">地图</a></li>';
+      }).join('') + '</ul></div>';
+  }
+  html += '<div class="note">守护人收不到实时推送时，点任意「地图」即可查看最新落点。</div>';
+  box.innerHTML = html;
+}
+
+function clearAll() {
+  if (!confirm('清空行程记录？')) return;
+  Object.keys(trips).forEach(function (k) { delete trips[k]; });
+  localStorage.setItem(LS_TRIPS, '[]');
+  location.reload();
+}
+
+/* 初始化：读历史 + 挂实时监听（与接警端相同的双通道机制） */
+(function () {
+  try {
+    JSON.parse(localStorage.getItem(LS_TRIPS) || '[]').forEach(handle);
+  } catch (e) {}
+  if ('BroadcastChannel' in window) {
+    new BroadcastChannel('campus-guard-sos').onmessage = function (e) { handle(e.data); };
+  }
+  window.addEventListener('storage', function (e) {
+    if (e.key !== LS_TRIPS || !e.newValue) return;
+    try { handle(JSON.parse(e.newValue).slice(-1)[0]); } catch (err) {}
+  });
+})();
+</script>
+
+<script>
+/* 长按统一处理：屏蔽系统上下文菜单与文字选中，避免打断页面的长按操作 */
+(function () {
+  var pick = 'button,[onclick],.chip,.tab';
+  document.addEventListener('contextmenu', function (e) {
+    if (e.target && e.target.closest && e.target.closest(pick)) e.preventDefault();
+  });
+  document.addEventListener('selectstart', function (e) {
+    if (e.target && e.target.closest && e.target.closest(pick)) { e.preventDefault(); return false; }
+  });
+})();
+</script>
+</body>
+</html>

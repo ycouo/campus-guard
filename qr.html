@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>校园守护 SOS · 全部入口</title>
+<meta name="theme-color" content="#e5322d" />
+<style>
+  * { margin:0; padding:0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  /* 与用户端同一套设计系统：同一套圆角、阴影、灰阶，几个页面看起来才像一个产品 */
+  :root { --red:#e5322d; --purple:#5b5bd6;
+    --ink:#171a20; --ink2:#4b5160; --muted:#8b91a1; --line:#eef0f4; --bg:#f6f7f9; --card:#fff;
+    --r:16px; --r-sm:12px; --r-xs:9px;
+    --sh1:0 1px 2px rgba(16,24,40,.04), 0 2px 8px rgba(16,24,40,.05); }
+  body { font-family: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--ink); padding: max(20px, env(safe-area-inset-top)) 14px max(24px, env(safe-area-inset-bottom)); }
+  .wrap { width: 100%; max-width: 520px; margin: 0 auto; }
+  .card { background: var(--card); border-radius: var(--r); padding: 20px 18px; margin-bottom: 12px; box-shadow: var(--sh1); }
+
+  /* 头部：盾牌图标 + 标题，一眼认出这是"安全"类应用 */
+  .head { text-align: center; margin-bottom: 20px; }
+  .head .mark { width:48px; height:48px; border-radius:15px; background:var(--red); color:#fff;
+    display:flex; align-items:center; justify-content:center; margin:0 auto 12px;
+    box-shadow:0 5px 16px rgba(229,50,45,.26); }
+  .head h1 { font-size: 20px; font-weight: 700; letter-spacing: .5px; }
+  .head p { font-size: 12.5px; color: var(--muted); margin-top:5px; }
+
+  /* 分组小标题：小号灰字，起到分隔作用又不抢视线 */
+  h2 { font-size: 13px; font-weight: 600; margin: 0 0 10px; color: var(--muted); letter-spacing:.4px; }
+
+  /* 入口列表：去掉描边，改用极淡灰底 —— 一排带边框的卡片并排时，边界线会互相打架 */
+  a.item { display: flex; align-items: center; gap: 12px; padding: 13px 12px; border-radius: var(--r-sm);
+    background: rgba(23,26,32,.035); text-decoration: none; color: inherit; margin-bottom: 8px;
+    transition: background .15s ease; }
+  a.item:active { background: rgba(23,26,32,.075); }
+  .ico { flex: 0 0 38px; height: 38px; border-radius: 11px; display: flex; align-items: center;
+    justify-content: center; font-size: 12.5px; font-weight: 600; color: #fff; }
+  .txt { flex: 1; min-width: 0; }
+  .txt .t { font-size: 14.5px; font-weight: 600; margin-bottom: 3px; display: block; }
+  .txt .d { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .arrow { color: #cfd3da; font-size: 17px; flex:none; }
+
+  .tip { font-size: 12.5px; line-height: 1.85; color: var(--ink2); margin: 12px 0 0; }
+  .tip b { color: var(--ink); }
+  .qrbox { text-align: center; padding: 6px 0 2px; }
+  .qrbox img { width: 186px; height: 186px; display: block; margin: 0 auto; border-radius: var(--r-sm); }
+  .qrbox p { font-size: 12px; color: var(--muted); margin: 10px 0 0; line-height: 1.6; }
+  .url { font-size: 11px; color: #b8bdc7; word-break: break-all; margin: 6px 0 0; }
+  .foot { text-align: center; font-size: 11.5px; color: #b8bdc7; line-height: 1.7; margin-top: 4px; }
+
+  /* 提示条：淡紫底、无描边，与其它页面的提示条保持一致 */
+  .note { background: #f4f3fe; border-radius: var(--r-sm); padding: 11px 13px;
+    font-size: 12px; line-height: 1.85; color: var(--ink2); margin-top: 12px; }
+  .note b { color: var(--ink); }
+
+  button, a.item { user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="card">
+    <div class="head">
+      <div class="mark"><svg viewBox="0 0 24 24" width="25" height="25" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21.5s7.5-3.6 7.5-9.5V5.2L12 2.5 4.5 5.2V12c0 5.9 7.5 9.5 7.5 9.5z"/></svg></div>
+      <h1>校园守护 SOS</h1>
+      <p>大连理工大学 · 校园安全一键报警</p>
+    </div>
+    <h2>打开哪个？</h2>
+    <a class="item" href="./index.html">
+      <span class="ico" style="background:#e24b4a;">用户</span>
+      <span class="txt">
+        <span class="t">用户端（学生自己的手机）</span>
+        <span class="d">一键报警 · 静默报警 · 夜间守护 · 伪装模式</span>
+      </span>
+      <span class="arrow">›</span>
+    </a>
+    <a class="item" href="./police.html" target="_blank" rel="noopener">
+      <span class="ico" style="background:#185fa5;">接警</span>
+      <span class="txt">
+        <span class="t">模拟接警端（电脑或第二台手机）</span>
+        <span class="d">演示用。真实场景里这是保卫处 / 110 的坐席</span>
+      </span>
+      <span class="arrow">›</span>
+    </a>
+    <a class="item" href="./campus.html">
+      <span class="ico" style="background:#3b6d11;">地图</span>
+      <span class="txt">
+        <span class="t">校园安全地图</span>
+        <span class="d">开发区 / 凌水主校区切换、求助点、定位</span>
+      </span>
+      <span class="arrow">›</span>
+    </a>
+    <a class="item" href="./share.html" target="_blank" rel="noopener">
+      <span class="ico" style="background:#854f0b;">行程</span>
+      <span class="txt">
+        <span class="t">行程分享（给室友看）</span>
+        <span class="d">实时位置与行程状态</span>
+      </span>
+      <span class="arrow">›</span>
+    </a>
+    <div class="note">
+      <b>演示建议</b>：电脑打开「模拟接警端」，手机打开「用户端」。两端在同一浏览器才能互通，
+      用两台设备的话请都从这个 HTTPS 地址进入。
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>把这个码发给同学</h2>
+    <div class="qrbox">
+      <img src="./qr-app.png" alt="校园守护二维码" />
+      <p>扫这个码会<b>直接进入用户端</b><br/>（HTTPS 环境，定位权限可正常调用）</p>
+      <p class="url" id="u"></p>
+    </div>
+    <p class="tip">
+      <b>建议先添加到主屏幕</b>：iPhone 用 Safari 分享 → 添加到主屏幕；安卓 Chrome 菜单 → 添加到主屏幕。
+      之后像独立 App 一样从桌面打开，切回来更快。
+    </p>
+  </div>
+
+  <p class="foot">「连小理」新生智能体应用与设计大赛 · 赛道一</p>
+</div>
+<script>
+  /* GitHub Pages 部署在子路径（/仓库名/）下，不能写死 origin + '/'，否则显示的地址是错的 */
+  document.getElementById('u').textContent = location.href.split('?')[0].replace(/qr\.html$/, '');
+</script>
+</body>
+</html>
