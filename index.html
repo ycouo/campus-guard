@@ -1489,14 +1489,35 @@ function recPlayerFallback(a) {
                   '<span class="rec-pos">00:00 / ' + total + '</span>';
   card.appendChild(row);
   const play = row.querySelector('.rec-play'), posTxt = row.querySelector('.rec-pos');
-  play.onclick = function () { if (a.paused) { a.play(); } else { a.pause(); } };
-  a.onplay = function () { play.textContent = '\u275a\u275a 暂停'; };
-  const rest = function () { play.textContent = '\u25b6 播放'; };
-  a.onpause = rest;
-  a.onended = rest;
-  a.ontimeupdate = function () {
-    if (posTxt) posTxt.textContent = fmtDur(a.currentTime) + ' / ' + total;
+  /* 微信/QQ 内核对没写时长的录音会"估"一个错误时长，导致 currentTime 直接跑飞
+     （实测：真实 3 秒的录音，currentTime 跳到 20 秒）。所以进度不读 a.currentTime，
+     改用播放时的真实墙钟来算——和卡片上那行时长同源，永远不会错。 */
+  let tick = null, baseMs = 0, startAt = 0;
+  const paint = function (ms) {
+    if (!posTxt) return;
+    const sec = Math.max(0, Math.min(ms, recMs)) / 1000;
+    posTxt.textContent = fmtDur(sec) + ' / ' + total;
   };
+  const stopTick = function () {
+    if (tick) { clearInterval(tick); tick = null; }
+  };
+  play.onclick = function () {
+    if (a.paused) { baseMs = 0; startAt = Date.now(); a.play(); }   /* 从头播，重置基准 */
+    else { baseMs = baseMs + (Date.now() - startAt); a.pause(); stopTick(); }
+  };
+  a.onplay = function () {
+    play.textContent = '\u275a\u275a 暂停';
+    if (baseMs === 0) { startAt = Date.now(); }
+    stopTick();
+    tick = setInterval(function () { paint(baseMs + (Date.now() - startAt)); }, 200);
+  };
+  const rest = function () {
+    play.textContent = '\u25b6 播放';
+    stopTick();
+    if (baseMs > 0) { paint(baseMs); } else { paint(0); }
+  };
+  a.onpause = rest;
+  a.onended = function () { baseMs = 0; rest(); };
 }
 
 async function toggleRecord() {
