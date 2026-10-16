@@ -1502,14 +1502,23 @@ function recPlayerFallback(a) {
     if (tick) { clearInterval(tick); tick = null; }
   };
   play.onclick = function () {
-    if (a.paused) { baseMs = 0; startAt = Date.now(); a.play(); }   /* 从头播，重置基准 */
-    else { baseMs = baseMs + (Date.now() - startAt); a.pause(); stopTick(); }
+    if (a.paused) {
+      baseMs = 0;
+      startAt = Date.now();
+      try { a.currentTime = 0; } catch (e) {}   /* 有些内核播放头位置是错的，强制从头 */
+      a.play();
+    } else { baseMs = baseMs + (Date.now() - startAt); a.pause(); stopTick(); }
   };
   a.onplay = function () {
     play.textContent = '\u275a\u275a 暂停';
     if (baseMs === 0) { startAt = Date.now(); }
     stopTick();
-    tick = setInterval(function () { paint(baseMs + (Date.now() - startAt)); }, 200);
+    tick = setInterval(function () {
+      const ms = baseMs + (Date.now() - startAt);
+      /* 文件时长元数据是坏的，音频不会在正确位置自己停 —— 到真实时长就掐掉 */
+      if (ms >= recMs) { paint(recMs); stopTick(); try { a.pause(); } catch (e) {} rest(); return; }
+      paint(ms);
+    }, 200);
   };
   const rest = function () {
     play.textContent = '\u25b6 播放';
@@ -1527,15 +1536,18 @@ async function toggleRecord() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     recChunks = [];
-    recorder = new MediaRecorder(stream);
-    recMime = recorder.mimeType || 'audio/webm';   /* iOS Safari 录出来是 mp4，不能写死 webm */
+    const mime = recPickMime();
+    recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    /* iOS Safari 录出来是 mp4。这里绝不能兜底成 'audio/webm' ——
+       内容明明是 mp4 却贴上 webm 标签，Safari 会直接拒绝播放。拿不到就老实留空。 */
+    recMime = recorder.mimeType || mime || '';
     recorder.ondataavailable = function (e) { recChunks.push(e.data); };
     recorder.onstop = async function () {
       recClearTimer();
       recMs = Date.now() - recStart;              /* 时长自己记，不依赖文件元数据 */
       stream.getTracks().forEach(function (t) { t.stop(); });
       if (recUrl) { try { URL.revokeObjectURL(recUrl); } catch (e) {} recUrl = null; }  /* 重录时释放上一条 */
-      let blob = new Blob(recChunks, { type: recMime });
+      let blob = recMime ? new Blob(recChunks, { type: recMime }) : new Blob(recChunks);
       /* 把真实时长写进文件本体。写不进去也不影响录音本身——只是播放器的时长不对，
          卡片上那行"时长 xx:xx"是自己记的，永远准确。 */
       if (/webm/i.test(recMime)) {
@@ -1553,7 +1565,11 @@ async function toggleRecord() {
         /* 元数据可能已经读好了（blob 很快），也可能要等一下，两条路都接上 */
         const fb = function () { recPlayerFallback(a); };
         if (a.readyState >= 1) fb();
-        else { a.addEventListener('loadedmetadata', fb); a.addEventListener('durationchange', fb); }
+        else {
+          a.addEventListener('loadedmetadata', fb);
+          a.addEventListener('durationchange', fb);
+          setTimeout(fb, 800);   /* iOS Safari 有时压根不吐元数据事件，超时强制接管 */
+        }
       }
       if (btn) { btn.style.fontVariantNumeric = ''; btn.textContent = '重新录音留证'; }
       recorder = null;
@@ -1567,6 +1583,17 @@ async function toggleRecord() {
     recTimer = setInterval(recTick, 500);
     if (btn) btn.style.fontVariantNumeric = 'tabular-nums';   /* 等宽数字，秒数变化时不抖 */
   } catch (e) { alert('无法录音：' + e.message); }
+}
+/* 各家浏览器录出来的格式不一样：Chrome/安卓是 webm(opus)，iOS Safari 只有 mp4。
+   挨个问一遍哪个能用，问不出来就干脆不指定，交给浏览器自己决定。 */
+function recPickMime() {
+  const list = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'];
+  for (let i = 0; i < list.length; i++) {
+    try {
+      if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(list[i])) return list[i];
+    } catch (e) {}
+  }
+  return '';
 }
 function stopRecord() {
   if (recorder && recorder.state === 'recording') { try { recorder.stop(); } catch (e) {} }
